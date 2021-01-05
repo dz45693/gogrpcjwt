@@ -15,7 +15,7 @@ option (grpc.gateway.protoc_gen_swagger.options.openapiv2_swagger) = {
 			name: "MIT";			
 		};
   };
-  schemes: HTTP;
+  schemes: HTTPS;
   consumes: "application/json";
   produces: "application/json";
 };

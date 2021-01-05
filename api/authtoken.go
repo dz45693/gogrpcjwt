@@ -31,6 +31,7 @@ func CreateToken(userName string) (tokenString string) {
 // AuthToekn 自定义认证
 type AuthToekn struct {
 	Token string
+	Tsl   bool
 }
 
 func (c AuthToekn) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
@@ -40,7 +41,8 @@ func (c AuthToekn) GetRequestMetadata(ctx context.Context, uri ...string) (map[s
 }
 
 func (c AuthToekn) RequireTransportSecurity() bool {
-	return false
+	return c.Tsl
+	//return false
 }
 
 // Claims defines the struct containing the token claims.
