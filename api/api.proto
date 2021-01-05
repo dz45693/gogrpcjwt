@@ -2,9 +2,40 @@ syntax = "proto3";
 package api;
 
 
+// 1 导入 gateway 相关的proto 以及 swagger 相关的 proto
+import "google/api/annotations.proto";
+import "protoc-gen-swagger/options/annotations.proto";
+ 
+// 2 定义 swagger 相关的内容
+option (grpc.gateway.protoc_gen_swagger.options.openapiv2_swagger) = {
+  info: {
+		title: "grpc gateway sample";
+		version: "1.0";	
+		license: {
+			name: "MIT";			
+		};
+  };
+  schemes: HTTP;
+  consumes: "application/json";
+  produces: "application/json";
+};
+
+
 service Ping {
-  rpc Login (LoginRequest) returns (LoginReply) {}
-  rpc SayHello(PingMessage) returns (PingMessage) {}
+  rpc Login (LoginRequest) returns (LoginReply) {
+    option (google.api.http) = {
+      post: "/login"
+      body: "*"
+  };
+
+  }
+  rpc SayHello(PingMessage) returns (PingMessage) {
+    option (google.api.http) = {
+      post: "/sayhello"
+      body: "*"
+  };
+
+  }
 }
 
 message LoginRequest{

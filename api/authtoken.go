@@ -2,11 +2,14 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
-	"google.golang.org/grpc/metadata"
+	"github.com/grpc-ecosystem/go-grpc-middleware/util/metautils"
+)
+
+var (
+	headerAuthorize = "authorization"
 )
 
 func CreateToken(userName string) (tokenString string) {
@@ -32,7 +35,7 @@ type AuthToekn struct {
 
 func (c AuthToekn) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
 	return map[string]string{
-		"authorization": c.Token,
+		headerAuthorize: c.Token,
 	}, nil
 }
 
@@ -50,25 +53,17 @@ type Claims struct {
 
 // Step1. 从 context 的 metadata 中，取出 token
 
-func getTokenFromContext(ctx context.Context) (string, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return "", fmt.Errorf("ErrNoMetadataInContext")
-	}
-	// md 的类型是 type MD map[string][]string
-	token, ok := md["authorization"]
-	if !ok || len(token) == 0 {
-		return "", fmt.Errorf("ErrNoAuthorizationInMetadata")
-	}
-	// 因此，token 是一个字符串数组，我们只用了 token[0]
-	return token[0], nil
+func getTokenFromContext(ctx context.Context) string {
+	val := metautils.ExtractIncoming(ctx).Get(headerAuthorize)
+	return val
 }
 
 func CheckAuth(ctx context.Context) (username string) {
-	tokenStr, err := getTokenFromContext(ctx)
-	if err != nil {
+	tokenStr := getTokenFromContext(ctx)
+	if len(tokenStr) == 0 {
 		panic("get token from context error")
 	}
+
 	var clientClaims Claims
 	token, err := jwt.ParseWithClaims(tokenStr, &clientClaims, func(token *jwt.Token) (interface{}, error) {
 		if token.Header["alg"] != "HS256" {
