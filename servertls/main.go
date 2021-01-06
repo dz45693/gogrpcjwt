@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -50,7 +51,12 @@ func main() {
 		log.Fatal(err)
 	}
 	// 創建grpc服務
-	rpcServer := grpc.NewServer()
+	//rpcServer := grpc.NewServer()
+	opts := []grpc.ServerOption{
+		grpc_middleware.WithUnaryServerChain(
+			api.AuthInterceptor,
+		)}
+	rpcServer := grpc.NewServer(opts...)
 	api.RegisterPingServer(rpcServer, new(api.Server))
 
 	// 創建http服務，監聽8080端口，並調用上面的兩個服務來處理請求

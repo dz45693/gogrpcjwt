@@ -2,10 +2,12 @@ package api
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/grpc-ecosystem/go-grpc-middleware/util/metautils"
+	grpc "google.golang.org/grpc"
 )
 
 var (
@@ -63,7 +65,7 @@ func getTokenFromContext(ctx context.Context) string {
 func CheckAuth(ctx context.Context) (username string) {
 	tokenStr := getTokenFromContext(ctx)
 	if len(tokenStr) == 0 {
-		panic("get token from context error")
+		return ""
 	}
 
 	var clientClaims Claims
@@ -82,4 +84,22 @@ func CheckAuth(ctx context.Context) (username string) {
 	}
 
 	return clientClaims.Username
+}
+
+/*
+ctx context.Context：请求上下文
+req interface{}：RPC 方法的请求参数
+info *UnaryServerInfo：RPC 方法的所有信息
+handler UnaryHandler：RPC 方法本身
+*/
+func AuthInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	userName := CheckAuth(ctx)
+	log.Printf("gRPC method: %s, %v", info.FullMethod, req)
+	newCtx := ctx
+	if len(userName) > 0 {
+		//使用context.WithValue添加了值后，可以用Value(key)方法获取值
+		newCtx = context.WithValue(ctx, "username", userName)
+		//log.Println(newCtx.Value("username"))
+	}
+	return handler(newCtx, req)
 }
