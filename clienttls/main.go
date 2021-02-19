@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -13,6 +14,11 @@ import (
 
 	"jwtdemo/api"
 
+	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
+	"github.com/opentracing/opentracing-go"
+	"github.com/uber/jaeger-client-go"
+	"github.com/uber/jaeger-client-go/config"
+	"github.com/uber/jaeger-lib/metrics"
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -43,12 +49,19 @@ func grpcCall() {
 		ServerName:   "localhost",
 		RootCAs:      certPool,
 	})
+
+	tracer, _ := TraceInit("GRPC-Client", "const", 1)
+	tracerOptions := grpc.WithUnaryInterceptor(
+		otgrpc.OpenTracingClientInterceptor(tracer, otgrpc.LogPayloads()),
+	)
+
 	//call Login
-	conn, err := grpc.Dial("localhost"+port, grpc.WithTransportCredentials(creds))
+	conn, err := grpc.Dial("localhost"+port, grpc.WithTransportCredentials(creds), tracerOptions)
 	if err != nil {
 		log.Fatalf("did not connect: %s", err)
 	}
 	defer conn.Close()
+
 	//c := api.NewPingClient(conn)
 	c := api.NewPingClient(conn)
 	loginReply, err := c.Login(context.Background(), &api.LoginRequest{Username: "gavin", Password: "gavin"})
@@ -61,7 +74,7 @@ func grpcCall() {
 	requestToken := new(api.AuthToekn)
 	requestToken.Token = loginReply.Token
 	requestToken.Tsl = true
-	conn, err = grpc.Dial(port, grpc.WithTransportCredentials(creds), grpc.WithPerRPCCredentials(requestToken))
+	conn, err = grpc.Dial(port, grpc.WithTransportCredentials(creds), grpc.WithPerRPCCredentials(requestToken), tracerOptions)
 	if err != nil {
 		log.Fatalf("did not connect: %s", err)
 	}
@@ -115,4 +128,25 @@ func httpCall() {
 		fmt.Println(err)
 	}
 	log.Printf(string(sayhelloReplyBytes))
+}
+
+func TraceInit(serviceName string, samplerType string, samplerParam float64) (opentracing.Tracer, io.Closer) {
+	cfg := &config.Configuration{
+		ServiceName: serviceName,
+		Sampler: &config.SamplerConfig{
+			Type:  samplerType,
+			Param: samplerParam,
+		},
+		Reporter: &config.ReporterConfig{
+			LocalAgentHostPort: "192.168.100.21:6831",
+			LogSpans:           true,
+		},
+	}
+
+	tracer, closer, err := cfg.NewTracer(config.Logger(jaeger.StdLogger), config.Metrics(metrics.NullFactory))
+	if err != nil {
+		panic(fmt.Sprintf("Init failed: %v\n", err))
+	}
+
+	return tracer, closer
 }

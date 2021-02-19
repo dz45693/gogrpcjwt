@@ -5,14 +5,20 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"io"
 	"io/ioutil"
 	api "jwtdemo/api"
 	"log"
 	"net/http"
 	"strings"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
+	"github.com/opentracing/opentracing-go"
+	"github.com/uber/jaeger-client-go"
+	"github.com/uber/jaeger-client-go/config"
+	"github.com/uber/jaeger-lib/metrics"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
@@ -52,10 +58,13 @@ func main() {
 	}
 	// 創建grpc服務
 	//rpcServer := grpc.NewServer()
+	tracer, _ := TraceInit("GRPC-Server", "const", 1)
 	opts := []grpc.ServerOption{
 		grpc_middleware.WithUnaryServerChain(
 			api.AuthInterceptor,
-		)}
+			otgrpc.OpenTracingServerInterceptor(tracer, otgrpc.LogPayloads()),
+		),
+	}
 	rpcServer := grpc.NewServer(opts...)
 	api.RegisterPingServer(rpcServer, new(api.Server))
 
@@ -118,4 +127,25 @@ func getTLSConfig(host, caCertFile string, certOpt tls.ClientAuthType) *tls.Conf
 		MinVersion: tls.VersionTLS12, // TLS versions below 1.2 are considered insecure - see https://www.rfc-editor.org/rfc/rfc7525.txt for details
 	}
 
+}
+
+func TraceInit(serviceName string, samplerType string, samplerParam float64) (opentracing.Tracer, io.Closer) {
+	cfg := &config.Configuration{
+		ServiceName: serviceName,
+		Sampler: &config.SamplerConfig{
+			Type:  samplerType,
+			Param: samplerParam,
+		},
+		Reporter: &config.ReporterConfig{
+			LocalAgentHostPort: "192.168.100.21:6831",
+			LogSpans:           true,
+		},
+	}
+
+	tracer, closer, err := cfg.NewTracer(config.Logger(jaeger.StdLogger), config.Metrics(metrics.NullFactory))
+	if err != nil {
+		panic(fmt.Sprintf("Init failed: %v\n", err))
+	}
+
+	return tracer, closer
 }
